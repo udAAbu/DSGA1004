@@ -1,18 +1,21 @@
 import sys
-import pyspark
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
 
-def downsampling(spark, hdfs_path, local_path):
-    df = spark.read.parquet(hdfs_path)
-    tiny_sample = df.sample(False, 0.01, seed=0)
-    tiny_sample.write.mode('overwrite').parquet(local_path)
-    print("sample finished")
+def downsampling(spark):
+    cf_val = spark.read.parquet('hdfs:/user/bm106/pub/MSD/cf_validation.parquet')
+    cf_train = spark.read.parquet("hdfs:/user/bm106/pub/MSD/cf_train.parquet")
+
+    cf_val.createOrReplaceTempView("cf_val")
+    val_users = set([row['user_id'] for row in spark.sql("SELECT DISTINCT user_id FROM cf_val").collect()])
+    train_sample = cf_train.filter(col('user_id').isin(val_users))
+    print(train_sample.count())
+
+    train_sample.write.parquet("hdfs:/user/zn2041/train_sample.parquet")
 
 if __name__ == "__main__":
     spark = SparkSession.builder.appName("downsampling").getOrCreate()
-    hdfs_path = sys.argv[1]
-    local_path = sys.argv[2]
-    downsampling(spark, hdfs_path, local_path)
+    downsampling(spark)
 
 
 
